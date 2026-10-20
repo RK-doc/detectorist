@@ -593,7 +593,7 @@ canvas { touch-action: none; }
 
   <div id="fullscreen-hint">
     <span class="icon">⛶</span>
-    <span>Tap to resume fullscreen</span>
+    <span>Tap to resume</span>
   </div>
 
   <div id="paused-overlay">
@@ -1214,29 +1214,21 @@ muteBtn.addEventListener('pointerdown', (e) => {
   }
 });
 
-// --- FULLSCREEN HINT TAP ---
-// Tapping the hint reclaims fullscreen (counts as a user gesture)
+// --- RESUME BANNER TAP ---
+// One gesture resumes the game AND reclaims fullscreen. Only active in
+// landscape (the banner isn't visible in portrait).
 document.getElementById('fullscreen-hint').addEventListener('pointerdown', (e) => {
-  e.stopPropagation();
-  e.preventDefault();
-  requestFullscreenIfTouch();
-});
-
-// --- PAUSE OVERLAY TAP ---
-// Tap anywhere on the paused overlay (not just the Resume button) to resume.
-// Only takes effect in landscape; in portrait, taps are ignored so the user
-// has to rotate first, which clears the overlay's portrait content.
-function handlePauseOverlayTap(e) {
   e.stopPropagation();
   e.preventDefault();
   const portrait = window.innerHeight > window.innerWidth;
   if (portrait) return;
-  // User gesture — reclaim fullscreen and clear all pause reasons together
   requestFullscreenIfTouch();
   setHiddenPause(false);
   setOrientationPause(false);
-}
-document.getElementById('paused-overlay').addEventListener('pointerdown', handlePauseOverlayTap);
+});
+
+// The paused overlay (portrait rotation hint) is purely informational — the
+// user must physically rotate the phone to continue; it has no tap handler.
 
 // ============================================================
 //   PLAYER + DETECTOR UPDATE
@@ -2148,24 +2140,23 @@ function recomputePauseState() {
   const stage = document.getElementById('stage');
   stage.classList.toggle('paused', nowPaused);
 
-  // Single paused overlay for all non-toast pauses. Content morphs based on
-  // orientation: portrait = rotation hint (no button), landscape = tap-to-resume.
+  // The big modal only appears in portrait as the rotation hint. In landscape,
+  // the single top banner (fullscreen-hint, now labelled "Tap to resume") is
+  // the only pause UI.
   const overlay = document.getElementById('paused-overlay');
   if (overlay) {
     const portrait = window.innerHeight > window.innerWidth;
-    const showOverlay = nowPaused && !game.toastPaused;
+    const showOverlay = nowPaused && !game.toastPaused && portrait;
     overlay.classList.toggle('visible', showOverlay);
-    overlay.classList.toggle('portrait', portrait);
+    overlay.classList.add('portrait');  // the overlay is always configured as portrait content now
     const icon = overlay.querySelector('.icon');
     const msg = overlay.querySelector('.msg');
-    if (portrait) {
-      if (icon) icon.textContent = '📱';
-      if (msg) msg.textContent = 'Rotate your phone to resume';
-    } else {
-      if (icon) icon.textContent = '⏸';
-      if (msg) msg.textContent = 'Tap to resume';
-    }
+    if (icon) icon.textContent = '📱';
+    if (msg) msg.textContent = 'Rotate your phone to resume';
   }
+
+  // The resume banner (top of screen) is what the user actually taps in landscape
+  updateFullscreenHint();
 
   if (nowPaused) {
     // Silence everything while paused — detector hum and any ongoing vibration
@@ -2291,13 +2282,15 @@ function requestFullscreenIfTouch() {
     if (p && p.catch) p.catch(() => {});
   } catch (e) {}
 }
-// If we lose fullscreen mid-game (sleep, rotate, system intervention), show
-// a soft reminder so the user can tap once to reclaim it.
+// Resume banner — the single tap target shown when the game is paused in
+// landscape. One tap clears every pause reason and reclaims fullscreen.
+// In portrait, the big phone-rotation overlay takes over instead.
 function updateFullscreenHint() {
   const hint = document.getElementById('fullscreen-hint');
   if (!hint) return;
-  const needHint = isTouchDevice && game.phase === 'play' && !isInFullscreen();
-  hint.classList.toggle('visible', needHint);
+  const portrait = window.innerHeight > window.innerWidth;
+  const show = isTouchDevice && game.phase === 'play' && game.paused && !portrait && !game.toastPaused;
+  hint.classList.toggle('visible', show);
 }
 
 function startGame() {
