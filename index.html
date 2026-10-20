@@ -33,13 +33,13 @@ html, body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   height: 100%;
   overflow: hidden;
-  padding-top: env(safe-area-inset-top, 0px);
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  overscroll-behavior: none;
 }
 #stage {
   position: relative;
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   display: grid;
   place-items: center;
 }
@@ -48,6 +48,7 @@ canvas {
   background: #4e6030;
   box-shadow: 0 20px 60px rgba(0,0,0,0.6);
   image-rendering: crisp-edges;
+  touch-action: none;
 }
 .overlay {
   position: absolute;
@@ -57,12 +58,19 @@ canvas {
   background: radial-gradient(ellipse at center, rgba(37,26,16,0.75), rgba(15,10,5,0.95));
   z-index: 20;
   padding: 20px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
 }
 .panel {
   background: var(--panel);
   border: 1px solid var(--panel-line);
   padding: 34px 40px;
+  width: 100%;
   max-width: 520px;
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   text-align: left;
   position: relative;
 }
@@ -247,6 +255,126 @@ button:focus-visible { outline: 2px solid var(--chalk); outline-offset: 2px; }
   font-size: 0.85em;
   margin-top: 14px;
 }
+
+/* Touch UI is shown only on devices that support touch input. */
+.touch-hint { display: none; }
+#touch-controls {
+  display: none;
+  position: absolute;
+  z-index: 14;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding: 0 max(16px, env(safe-area-inset-right, 0px))
+           max(16px, env(safe-area-inset-bottom, 0px))
+           max(16px, env(safe-area-inset-left, 0px));
+  pointer-events: none;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.touch-device #touch-controls:not(.hidden) { display: flex; }
+#joystick {
+  position: relative;
+  flex: 0 0 auto;
+  width: 128px;
+  height: 128px;
+  border: 2px solid rgba(240, 232, 212, 0.38);
+  border-radius: 50%;
+  background: rgba(37, 26, 16, 0.64);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2), inset 0 0 28px rgba(0, 0, 0, 0.26);
+  pointer-events: auto;
+  touch-action: none;
+}
+#joystick::before, #joystick::after {
+  content: '';
+  position: absolute;
+  background: rgba(240, 232, 212, 0.14);
+  pointer-events: none;
+}
+#joystick::before { width: 1px; top: 15px; bottom: 15px; left: 50%; }
+#joystick::after { height: 1px; left: 15px; right: 15px; top: 50%; }
+#joystick-thumb {
+  position: absolute;
+  width: 54px;
+  height: 54px;
+  left: calc(50% - 27px);
+  top: calc(50% - 27px);
+  border-radius: 50%;
+  border: 2px solid var(--brass-hi);
+  background: rgba(201, 168, 106, 0.88);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.45);
+  transform: translate(0px, 0px);
+  pointer-events: none;
+}
+.touch-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  pointer-events: none;
+}
+.touch-actions .touch-btn {
+  margin: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  padding: 0 7px;
+  text-align: center;
+  font-size: 12px;
+  letter-spacing: 0.03em;
+  border: 2px solid rgba(240, 232, 212, 0.38);
+  pointer-events: auto;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+#run-btn {
+  width: 62px;
+  height: 62px;
+  color: var(--chalk);
+  background: rgba(37, 26, 16, 0.82);
+}
+#run-btn.is-down { background: var(--burgundy); border-color: var(--burgundy-hi); }
+#action-btn {
+  width: 88px;
+  height: 88px;
+  color: var(--humus-deep);
+  background: var(--brass);
+  font-weight: 800;
+}
+#action-btn:disabled { background: rgba(201, 168, 106, 0.84); color: rgba(37, 26, 16, 0.75); opacity: 1; }
+.touch-device .keyboard-hint { display: none; }
+.touch-device .touch-hint { display: block; }
+.touch-device #hud {
+  top: max(8px, env(safe-area-inset-top, 0px));
+  left: max(8px, env(safe-area-inset-left, 0px));
+  right: max(8px, env(safe-area-inset-right, 0px));
+  font-size: 11px;
+  gap: 5px;
+}
+.touch-device .hud-panel { padding: 6px 7px; flex: 1 1 0; min-width: 0; }
+.touch-device .hud-panel .val { font-size: 1em; }
+.touch-device .bar-wrap { width: 100%; min-width: 0; }
+.touch-device #find-toast {
+  bottom: calc(185px + env(safe-area-inset-bottom, 0px));
+  width: min(300px, calc(100vw - 24px));
+  min-width: 0;
+  padding: 10px 14px;
+}
+@media (max-height: 540px) {
+  .touch-device #joystick { width: 110px; height: 110px; }
+  .touch-device #run-btn { width: 50px; height: 50px; font-size: 10px; }
+  .touch-device #action-btn { width: 74px; height: 74px; font-size: 10px; }
+  .touch-device #find-toast { bottom: calc(145px + env(safe-area-inset-bottom, 0px)); }
+}
+@media (max-width: 480px) {
+  .panel { padding: 20px 22px; }
+  h1 { font-size: 2em; }
+  .panel p { font-size: 0.91em; }
+}
 </style>
 </head>
 <body>
@@ -269,6 +397,16 @@ button:focus-visible { outline: 2px solid var(--chalk); outline-offset: 2px; }
     </div>
   </div>
 
+  <div id="touch-controls" class="hidden" aria-label="Touch game controls">
+    <div id="joystick" role="group" aria-label="Movement joystick">
+      <div id="joystick-thumb"></div>
+    </div>
+    <div class="touch-actions">
+      <button type="button" id="run-btn" class="touch-btn" aria-label="Hold to sprint">RUN</button>
+      <button type="button" id="action-btn" class="touch-btn" aria-label="Pinpoint or dig" disabled>SEARCH</button>
+    </div>
+  </div>
+
   <div id="find-toast">
     <div class="find-name" id="toast-name"></div>
     <div class="find-desc" id="toast-desc"></div>
@@ -280,17 +418,22 @@ button:focus-visible { outline: 2px solid var(--chalk); outline-offset: 2px; }
       <p class="eyebrow">A gentleman's field diary, vol. I</p>
       <h1>Detectorist</h1>
       <p>Sweep the meadow. Read the ground by ear. Fill your pouch with lost pennies, brooches, and the occasional Roman surprise — and be off through the gate before Farmer Kubát runs you off with his pitchfork.</p>
-      <p class="small">
+      <p class="small keyboard-hint">
         <kbd>W A S D</kbd> or <kbd>arrows</kbd> — walk the field<br>
         <kbd>Shift</kbd> — sprint (watch your stamina)<br>
         <kbd>Space</kbd> — pinpoint a signal, then dig<br>
         Head south through the gate to bank your finds.
       </p>
+      <p class="small touch-hint">
+        Move with the left joystick. Hold RUN to sprint. When you hear a signal,
+        tap PINPOINT, get close to the marked spot, then tap DIG.
+        Escape south through the gate to keep your finds.
+      </p>
       <p class="small">
         Kubát keeps a watch from around his farmhouse. If he catches you knee-deep in his soil, he'll take everything you've dug up today.
       </p>
       <button id="start-btn">Begin the sweep</button>
-      <p class="footnote">Keyboard required — a phone will not do here.</p>
+      <p class="footnote">Play with a keyboard or touchscreen.</p>
     </div>
   </div>
 
@@ -374,6 +517,9 @@ const ITEM_TYPES = [
 // --- canvas / audio globals ---
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d', { alpha: false });
+const isTouchDevice = window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
+document.documentElement.classList.toggle('touch-device', isTouchDevice);
+const camera = { zoom: 1, dpr: 1, cssW: W, cssH: H };
 let audio = null;   // set on first user gesture
 
 // --- game state ---
@@ -704,6 +850,98 @@ function playSfx(type) {
 // ============================================================
 const keys = {};
 const pressed = {};   // one-shot presses cleared each frame after read
+const touchInput = { pointerId: null, sprintPointerId: null, dx: 0, dy: 0, sprint: false };
+const joystick = document.getElementById('joystick');
+const joystickThumb = document.getElementById('joystick-thumb');
+const runButton = document.getElementById('run-btn');
+const actionButton = document.getElementById('action-btn');
+
+function clearTouchInput() {
+  touchInput.pointerId = null;
+  touchInput.sprintPointerId = null;
+  touchInput.dx = 0;
+  touchInput.dy = 0;
+  touchInput.sprint = false;
+  joystickThumb.style.transform = 'translate(0px, 0px)';
+  runButton.classList.remove('is-down');
+}
+
+function updateJoystickFromPointer(e) {
+  const bounds = joystick.getBoundingClientRect();
+  const radius = bounds.width * 0.29;
+  const x = e.clientX - (bounds.left + bounds.width / 2);
+  const y = e.clientY - (bounds.top + bounds.height / 2);
+  const dist = Math.hypot(x, y);
+  const factor = dist ? Math.min(1, radius / dist) : 0;
+  const sx = x * factor, sy = y * factor;
+  const magnitude = Math.hypot(sx, sy) / radius;
+  touchInput.dx = magnitude > 0.12 ? sx / radius : 0;
+  touchInput.dy = magnitude > 0.12 ? sy / radius : 0;
+  joystickThumb.style.transform = `translate(${sx}px, ${sy}px)`;
+}
+
+joystick.addEventListener('pointerdown', e => {
+  if (game.phase !== 'play' || touchInput.pointerId !== null) return;
+  e.preventDefault();
+  touchInput.pointerId = e.pointerId;
+  joystick.setPointerCapture(e.pointerId);
+  updateJoystickFromPointer(e);
+});
+joystick.addEventListener('pointermove', e => {
+  if (e.pointerId === touchInput.pointerId) updateJoystickFromPointer(e);
+});
+function releaseJoystick(e) {
+  if (e.pointerId !== touchInput.pointerId) return;
+  touchInput.pointerId = null;
+  touchInput.dx = 0;
+  touchInput.dy = 0;
+  joystickThumb.style.transform = 'translate(0px, 0px)';
+}
+for (const eventName of ['pointerup', 'pointercancel', 'lostpointercapture']) {
+  joystick.addEventListener(eventName, releaseJoystick);
+}
+
+runButton.addEventListener('pointerdown', e => {
+  if (game.phase !== 'play' || touchInput.sprintPointerId !== null) return;
+  e.preventDefault();
+  touchInput.sprintPointerId = e.pointerId;
+  touchInput.sprint = true;
+  runButton.classList.add('is-down');
+  runButton.setPointerCapture(e.pointerId);
+});
+function releaseSprint(e) {
+  if (e.pointerId !== touchInput.sprintPointerId) return;
+  touchInput.sprintPointerId = null;
+  touchInput.sprint = false;
+  runButton.classList.remove('is-down');
+}
+for (const eventName of ['pointerup', 'pointercancel', 'lostpointercapture']) {
+  runButton.addEventListener(eventName, releaseSprint);
+}
+
+actionButton.addEventListener('click', () => {
+  if (game.phase === 'play') handleSpace();
+});
+
+function updateTouchActionButton() {
+  if (!isTouchDevice) return;
+  let label, disabled;
+  if (game.playerState === 'dig') {
+    label = 'DIGGING...';
+    disabled = true;
+  } else if (game.playerState === 'pinpoint') {
+    const t = game.pinpointTarget;
+    const nearby = t && dist(game.player.x, game.player.y, t.x, t.y) < 45;
+    label = nearby ? 'DIG' : 'GET CLOSER';
+    disabled = !nearby;
+  } else {
+    const signalFound = game.signalTarget && game.signal > 0.3;
+    label = signalFound ? 'PINPOINT' : 'SEARCH';
+    disabled = !signalFound;
+  }
+  if (actionButton.textContent !== label) actionButton.textContent = label;
+  if (actionButton.disabled !== !!disabled) actionButton.disabled = !!disabled;
+}
 
 window.addEventListener('keydown', e => {
   if (['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
@@ -713,11 +951,22 @@ window.addEventListener('keydown', e => {
 window.addEventListener('keyup', e => {
   keys[e.code] = false;
 });
+window.addEventListener('blur', () => {
+  for (const key of Object.keys(keys)) keys[key] = false;
+  clearTouchInput();
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) clearTouchInput();
+});
 
 // ============================================================
 //   PLAYER + DETECTOR UPDATE
 // ============================================================
 function readMoveInput() {
+  if (touchInput.pointerId !== null) {
+    const { dx, dy } = touchInput;
+    return { dx, dy, moving: Math.hypot(dx, dy) > 0.12 };
+  }
   let dx = 0, dy = 0;
   if (keys['KeyW'] || keys['ArrowUp'])    dy -= 1;
   if (keys['KeyS'] || keys['ArrowDown'])  dy += 1;
@@ -740,7 +989,7 @@ function updatePlayer(dt) {
   }
 
   const { dx, dy, moving } = readMoveInput();
-  const wantRun = (keys['ShiftLeft'] || keys['ShiftRight']) && p.stamina > 0;
+  const wantRun = (keys['ShiftLeft'] || keys['ShiftRight'] || touchInput.sprint) && p.stamina > 0;
   const speed = wantRun ? PLAYER_RUN : PLAYER_WALK;
 
   if (game.playerState === 'pinpoint') {
@@ -757,8 +1006,10 @@ function updatePlayer(dt) {
     p.vy = dy * speed;
   }
 
-  p.x = clamp(p.x + p.vx, 50, W - 50);
-  p.y = clamp(p.y + p.vy, 55, H - 20);
+  // Speeds were originally pixels per 60 Hz frame. Make them frame-rate independent.
+  const frameScale = dt * 60;
+  p.x = clamp(p.x + p.vx * frameScale, 50, W - 50);
+  p.y = clamp(p.y + p.vy * frameScale, 55, H - 20);
 
   // Facing
   if (moving) {
@@ -898,7 +1149,8 @@ function updateFarmer(dt) {
 
   const vis = farmerCanSee(f.x, f.y, f.facing);
   const digBoost = game.playerState === 'dig' ? 2.6 : 1;
-  const runBoost = ((keys['ShiftLeft']||keys['ShiftRight']) && (game.player.vx || game.player.vy)) ? 1.5 : 1;
+  const runBoost = ((keys['ShiftLeft']||keys['ShiftRight']||touchInput.sprint) && (game.player.vx || game.player.vy)) ? 1.5 : 1;
+  const frameScale = dt * 60;
 
   switch (f.state) {
     case 'patrol': {
@@ -912,8 +1164,8 @@ function updateFarmer(dt) {
           f.wpIdx = (f.wpIdx + 1) % props.waypoints.length;
         }
       } else {
-        f.x += (dx/d) * FARMER_WALK;
-        f.y += (dy/d) * FARMER_WALK;
+        f.x += (dx/d) * FARMER_WALK * frameScale;
+        f.y += (dy/d) * FARMER_WALK * frameScale;
         // Smooth facing to travel direction
         const target = Math.atan2(dy, dx);
         f.facing += angleDiff(target, f.facing) * Math.min(1, dt * 4);
@@ -962,8 +1214,8 @@ function updateFarmer(dt) {
       const dx = game.player.x - f.x, dy = game.player.y - f.y;
       const d = Math.sqrt(dx*dx+dy*dy);
       if (d > 0.1) {
-        f.x += (dx/d) * FARMER_CHASE;
-        f.y += (dy/d) * FARMER_CHASE;
+        f.x += (dx/d) * FARMER_CHASE * frameScale;
+        f.y += (dy/d) * FARMER_CHASE * frameScale;
         f.facing = Math.atan2(dy, dx);
       }
       // Catch
@@ -992,8 +1244,8 @@ function updateFarmer(dt) {
         f.state = 'patrol';
         f.awareness = 0;
       } else {
-        f.x += (dx/d) * FARMER_WALK * 1.4;
-        f.y += (dy/d) * FARMER_WALK * 1.4;
+        f.x += (dx/d) * FARMER_WALK * 1.4 * frameScale;
+        f.y += (dy/d) * FARMER_WALK * 1.4 * frameScale;
         f.facing = Math.atan2(dy, dx);
       }
       f.awareness = Math.max(0, f.awareness - 15 * dt);
@@ -1016,7 +1268,19 @@ function draw() {
   // Reset transform in case any save/restore leaked, then hard-clear
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = '#3a5028';
-  ctx.fillRect(0, 0, W, H);
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.save();
+  if (isTouchDevice) {
+    // Follow the player on phones instead of shrinking the whole field to a dot.
+    const visibleW = camera.cssW / camera.zoom;
+    const visibleH = camera.cssH / camera.zoom;
+    const camX = clamp(game.player.x - visibleW / 2, 0, Math.max(0, W - visibleW));
+    const camY = clamp(game.player.y - visibleH / 2, 0, Math.max(0, H - visibleH));
+    const padX = Math.max(0, (visibleW - W) / 2);
+    const padY = Math.max(0, (visibleH - H) / 2);
+    const scale = camera.zoom * camera.dpr;
+    ctx.setTransform(scale, 0, 0, scale, (padX - camX) * scale, (padY - camY) * scale);
+  }
   // Field
   ctx.drawImage(fieldCanvas, 0, 0);
 
@@ -1030,6 +1294,7 @@ function draw() {
   drawGateLabel();
   drawPinpointRing();
   drawDigProgress();
+  ctx.restore();
 }
 
 function drawGate() {
@@ -1328,7 +1593,7 @@ function drawPinpointRing() {
   ctx.fillStyle = 'rgba(240, 232, 212, 0.85)';
   ctx.font = 'italic 15px Fraunces, Georgia, serif';
   ctx.textAlign = 'center';
-  ctx.fillText('press space to dig', t.x, t.y - PINPOINT_R - 14);
+  ctx.fillText(isTouchDevice ? (dist(game.player.x, game.player.y, t.x, t.y) < 45 ? 'tap DIG' : 'move closer to dig') : 'press space to dig', t.x, t.y - PINPOINT_R - 14);
   ctx.restore();
 }
 
@@ -1516,6 +1781,8 @@ function endSession(reason) {
   if (game.phase !== 'play') return;
   game.phase = 'end';
   game.endReason = reason;
+  clearTouchInput();
+  document.getElementById('touch-controls').classList.add('hidden');
   setDetectorTone(0, false);
   if (reason === 'escaped') {
     playSfx('escape');
@@ -1588,13 +1855,16 @@ function startGame() {
   document.getElementById('start-screen').classList.add('hidden');
   document.getElementById('end-screen').classList.add('hidden');
   document.getElementById('hud').classList.remove('hidden');
+  document.getElementById('touch-controls').classList.toggle('hidden', !isTouchDevice);
   resetGame();
   game.phase = 'play';
   game.lastFrame = performance.now();
   updateHud();
+  updateTouchActionButton();
 }
 
 function resetGame() {
+  clearTouchInput();
   // Clear any lingering toast from a prior run
   const toast = document.getElementById('find-toast');
   if (toast) toast.classList.remove('show');
@@ -1647,6 +1917,7 @@ function tick(now) {
     updateDig(dt);
     updateFarmer(dt);
     updateHud();
+    updateTouchActionButton();
   }
 
   draw();
@@ -1661,18 +1932,32 @@ function tick(now) {
 //   RESIZE / FIT
 // ============================================================
 function fitCanvas() {
-  const aspect = W / H;
-  let cw = window.innerWidth;
-  let ch = window.innerHeight;
-  if (cw / ch > aspect) {
-    cw = ch * aspect;
+  const stage = document.getElementById('stage');
+  const viewW = stage.clientWidth || window.innerWidth;
+  const viewH = stage.clientHeight || window.innerHeight;
+  if (isTouchDevice) {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    camera.cssW = viewW;
+    camera.cssH = viewH;
+    camera.dpr = dpr;
+    camera.zoom = clamp(Math.min(viewW, viewH) / 320, 1.1, 1.55);
+    canvas.style.width = viewW + 'px';
+    canvas.style.height = viewH + 'px';
+    canvas.width = Math.round(viewW * dpr);
+    canvas.height = Math.round(viewH * dpr);
   } else {
-    ch = cw / aspect;
+    const aspect = W / H;
+    let cw = viewW, ch = viewH;
+    if (cw / ch > aspect) cw = ch * aspect;
+    else ch = cw / aspect;
+    canvas.style.width = cw + 'px';
+    canvas.style.height = ch + 'px';
+    canvas.width = W;
+    canvas.height = H;
   }
-  canvas.style.width = cw + 'px';
-  canvas.style.height = ch + 'px';
 }
 window.addEventListener('resize', fitCanvas);
+if (window.visualViewport) window.visualViewport.addEventListener('resize', fitCanvas);
 
 // ============================================================
 //   BOOT
