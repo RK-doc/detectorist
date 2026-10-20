@@ -41,7 +41,6 @@ html, body {
   width: 100vw;
   /* 100dvh adapts to Chrome's address bar as it hides/shows */
   height: 100dvh;
-  min-height: 100vh;
   display: grid;
   place-items: center;
 }
@@ -54,11 +53,14 @@ canvas {
 .overlay {
   position: absolute;
   inset: 0;
-  display: grid;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   background: radial-gradient(ellipse at center, rgba(37,26,16,0.75), rgba(15,10,5,0.95));
   z-index: 20;
   padding: 20px;
+  overflow-y: auto;    /* if content taller than viewport, let user scroll */
 }
 .panel {
   background: var(--panel);
@@ -277,20 +279,22 @@ canvas { touch-action: none; }
   border: 2px solid rgba(107, 85, 57, 0.8);
   color: var(--brass-hi);
   font-family: 'Fraunces', Georgia, serif;
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 600;
   z-index: 25;
   margin: 0;
   padding: 0;
   user-select: none;
-  touch-action: none;
+  touch-action: manipulation;
+  -webkit-user-select: none;
   display: none;
   align-items: center;
   justify-content: center;
   transition: background 0.2s, border-color 0.2s, transform 0.1s, opacity 0.2s;
-  opacity: 0.5;
+  opacity: 0.35;
   letter-spacing: 0.03em;
 }
+#action-btn.idle { pointer-events: none; }
 #action-btn.scan {
   opacity: 1;
   background: rgba(107, 144, 128, 0.88);
@@ -421,8 +425,9 @@ canvas { touch-action: none; }
 
 .mobile-only { display: none; }
 @media (hover: none) and (pointer: coarse) {
-  #action-btn { display: flex; }
-  #stamina-mobile { display: block; }
+  /* Only show touch controls while playing — not on the start/end overlays */
+  #stage.is-playing #action-btn { display: flex; }
+  #stage.is-playing #stamina-mobile { display: block; }
   #mute-btn { display: flex; }
   .mobile-only { display: block; }
   .desktop-only { display: none; }
@@ -436,6 +441,31 @@ canvas { touch-action: none; }
   .panel h1 { font-size: 1.9em; }
   .panel p { font-size: 0.9em; margin: 8px 0; }
   button { padding: 10px 22px; font-size: 0.95em; }
+}
+
+/* Landscape mobile — Chrome's address bar leaves only ~340-400px of height,
+   so the start/end panels must be very compact and comfortably fit. */
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) {
+  .overlay { padding: 8px; }
+  .panel {
+    padding: 14px 22px;
+    max-width: min(92vw, 520px);
+    max-height: calc(100dvh - 16px);
+    overflow-y: auto;
+  }
+  .panel::before { inset: 4px; }
+  .panel h1 { font-size: 1.35em; margin-bottom: 2px; }
+  .panel h2 { font-size: 1.15em; margin-bottom: 8px; }
+  .panel .eyebrow,
+  .panel .subtitle { margin-bottom: 8px; font-size: 0.78em; }
+  .panel p { font-size: 0.78em; margin: 5px 0; line-height: 1.35; }
+  .panel .small { font-size: 0.74em; line-height: 1.4; }
+  .panel kbd { padding: 0 5px; font-size: 0.75em; }
+  button { padding: 8px 20px; font-size: 0.88em; margin-top: 8px; }
+  .footnote { font-size: 0.7em; margin-top: 6px; }
+  .hd-toggle { font-size: 0.76em; margin-top: 8px; gap: 6px; }
+  .hd-toggle input[type="checkbox"] { width: 14px; height: 14px; }
+  .finds-list { max-height: 90px; }
 }
 </style>
 </head>
@@ -1919,10 +1949,10 @@ function updateHud() {
     vignette.style.opacity = op;
   }
 
-  // Action button — context-sensitive label
+  // Action button — context-sensitive label and interactivity
   const btn = document.getElementById('action-btn');
   if (btn) {
-    let cls = '', label = 'Sweep';
+    let cls = 'idle', label = '◌';   // idle = not tappable, shows a hollow mark
     if (game.playerState === 'dig') { cls = 'dig'; label = '…'; }
     else if (game.playerState === 'pinpoint') { cls = 'dig'; label = 'Dig'; }
     else if (game.signal > 0.3) { cls = 'scan'; label = 'Scan'; }
@@ -1960,6 +1990,7 @@ function endSession(reason) {
 
 function showEndScreen(reason) {
   document.getElementById('hud').classList.add('hidden');
+  document.getElementById('stage').classList.remove('is-playing');
   const scr = document.getElementById('end-screen');
   const title = document.getElementById('end-title');
   const msg = document.getElementById('end-message');
@@ -2044,6 +2075,7 @@ function startGame() {
   document.getElementById('start-screen').classList.add('hidden');
   document.getElementById('end-screen').classList.add('hidden');
   document.getElementById('hud').classList.remove('hidden');
+  document.getElementById('stage').classList.add('is-playing');
   resetGame();
   game.phase = 'play';
   game.lastFrame = performance.now();
