@@ -453,10 +453,65 @@ canvas { touch-action: none; }
   50% { transform: translateX(-50%) scale(1.04); }
 }
 
-/* Darkened freeze when find toast is up */
+/* Darkened freeze when game is paused (toast, visibility, orientation) */
 #stage.paused canvas { filter: brightness(0.55) saturate(0.75); transition: filter 0.3s; }
 #stage canvas { transition: filter 0.3s; }
 #stage.paused #action-btn { pointer-events: none; opacity: 0.3; }
+
+/* Paused overlay for sleep / orientation (toast has its own card) */
+#paused-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 10, 5, 0.72);
+  z-index: 28;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 28;
+  touch-action: manipulation;
+}
+#paused-overlay.visible { display: flex; }
+#paused-overlay .box {
+  background: var(--panel);
+  border: 1px solid var(--panel-line);
+  padding: 24px 36px;
+  text-align: center;
+  position: relative;
+  max-width: 86vw;
+}
+#paused-overlay .box::before {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  border: 1px solid rgba(200, 168, 106, 0.22);
+  pointer-events: none;
+}
+#paused-overlay .icon {
+  font-size: 42px;
+  color: var(--brass-hi);
+  margin-bottom: 6px;
+}
+#paused-overlay .msg {
+  font-family: 'Fraunces', Georgia, serif;
+  font-style: italic;
+  color: var(--chalk);
+  font-size: 15px;
+  margin-bottom: 14px;
+  max-width: 320px;
+}
+#paused-overlay #resume-btn {
+  background: var(--brass);
+  color: var(--humus-deep);
+  border: none;
+  padding: 10px 28px;
+  font-size: 0.95em;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  margin: 0;
+  letter-spacing: 0.02em;
+}
+#paused-overlay #resume-btn:hover { background: var(--brass-hi); }
 
 .mobile-only { display: none; }
 @media (hover: none) and (pointer: coarse) {
@@ -528,6 +583,14 @@ canvas { touch-action: none; }
   <div id="fullscreen-hint">
     <span class="icon">⛶</span>
     <span>Tap to resume fullscreen</span>
+  </div>
+
+  <div id="paused-overlay">
+    <div class="box">
+      <div class="icon">⏸</div>
+      <div class="msg">Paused</div>
+      <button id="resume-btn">Resume</button>
+    </div>
   </div>
 
   <div id="hud" class="hidden">
@@ -1146,6 +1209,21 @@ document.getElementById('fullscreen-hint').addEventListener('pointerdown', (e) =
   e.stopPropagation();
   e.preventDefault();
   requestFullscreenIfTouch();
+});
+
+// --- RESUME BUTTON (paused overlay) ---
+// Resume only works when the phone is in landscape — otherwise the orientation
+// pause reason stays set and the overlay message tells the user to rotate.
+document.getElementById('resume-btn').addEventListener('pointerdown', (e) => {
+  e.stopPropagation();
+  e.preventDefault();
+  // User gesture — try to reclaim fullscreen too
+  requestFullscreenIfTouch();
+  // Clear visibility pause unconditionally; clear orientation pause only
+  // when actually in landscape, else the overlay stays with its message.
+  setHiddenPause(false);
+  const portrait = window.innerHeight > window.innerWidth;
+  if (!portrait) setOrientationPause(false);
 });
 
 // ============================================================
@@ -2034,17 +2112,74 @@ function showFindToast(def) {
 
 function pauseForToast() {
   if (game.phase !== 'play') return;
-  game.paused = true;
-  document.getElementById('stage').classList.add('paused');
-  // Silence the detector hum during the pause
-  setDetectorTone(0, false);
+  game.toastPaused = true;
+  recomputePauseState();
 }
 function resumeFromToast() {
   if (game.phase !== 'play') return;
-  game.paused = false;
-  document.getElementById('stage').classList.remove('paused');
-  // Reset frame timing so dt doesn't jump
-  game.lastFrame = performance.now();
+  game.toastPaused = false;
+  recomputePauseState();
+}
+
+// Central pause orchestrator — toast pause, visibility pause, orientation pause
+// all feed into a single `game.paused` flag. The game resumes only when every
+// reason to pause has cleared.
+function recomputePauseState() {
+  if (game.phase !== 'play') return;
+  const wasPaused = game.paused;
+  const nowPaused =
+    !!game.toastPaused ||
+    !!game.hiddenPaused ||
+    !!game.orientationPaused;
+  game.paused = nowPaused;
+
+  const stage = document.getElementById('stage');
+  stage.classList.toggle('paused', nowPaused);
+
+  // Explicit paused overlay (for sleep / orientation — not for toast,
+  // which has its own card and darkening)
+  const overlay = document.getElementById('paused-overlay');
+  if (overlay) {
+    const showOverlay = nowPaused && !game.toastPaused;
+    overlay.classList.toggle('visible', showOverlay);
+    const msg = overlay.querySelector('.msg');
+    if (msg) {
+      if (game.orientationPaused && !game.hiddenPaused) {
+        msg.textContent = 'Paused — rotate phone or tap to resume';
+      } else if (game.hiddenPaused) {
+        msg.textContent = 'Paused — tap to resume';
+      } else {
+        msg.textContent = 'Paused';
+      }
+    }
+  }
+
+  if (nowPaused) {
+    // Silence everything while paused — detector hum and any ongoing vibration
+    setDetectorTone(0, false);
+    if (navigator.vibrate) { try { navigator.vibrate(0); } catch(e){} }
+    // Suspend the audio context so no stray oscillator leaks through
+    if (audio && audio.ctx && audio.ctx.state === 'running') {
+      try { audio.ctx.suspend(); } catch (e) {}
+    }
+  } else if (wasPaused) {
+    // Resume: reset frame timing so dt doesn't jump; wake audio
+    game.lastFrame = performance.now();
+    if (audio && audio.ctx && audio.ctx.state === 'suspended') {
+      try { audio.ctx.resume(); } catch (e) {}
+    }
+  }
+}
+
+function setOrientationPause(paused) {
+  if (game.orientationPaused === paused) return;
+  game.orientationPaused = paused;
+  recomputePauseState();
+}
+function setHiddenPause(paused) {
+  if (game.hiddenPaused === paused) return;
+  game.hiddenPaused = paused;
+  recomputePauseState();
 }
 
 function endSession(reason) {
@@ -2188,7 +2323,12 @@ function resetGame() {
   if (toast) toast.classList.remove('show');
   if (toastTimer) { clearTimeout(toastTimer); toastTimer = null; }
   document.getElementById('stage').classList.remove('paused');
+  const overlay = document.getElementById('paused-overlay');
+  if (overlay) overlay.classList.remove('visible');
   game.paused = false;
+  game.toastPaused = false;
+  game.hiddenPaused = false;
+  game.orientationPaused = false;
 
   game.playerState = 'walk';
   game.time = 0;
@@ -2265,16 +2405,42 @@ function fitCanvas() {
 window.addEventListener('resize', fitCanvas);
 
 // ============================================================
-//   ORIENTATION — show a rotation prompt on portrait mobile
+//   ORIENTATION — rotation prompt before play; pause while playing
 // ============================================================
 function checkOrientation() {
   if (!isTouchDevice) return;
-  const prompt = document.getElementById('rotation-prompt');
   const portrait = window.innerHeight > window.innerWidth;
-  prompt.classList.toggle('show', portrait);
+  const prompt = document.getElementById('rotation-prompt');
+  if (game.phase === 'play') {
+    // Mid-game: don't show the big rotation prompt — just pause.
+    // Any orientation change pauses; returning to landscape clears it
+    // only via the Resume button (user-initiated gesture).
+    prompt.classList.remove('show');
+    if (portrait) {
+      setOrientationPause(true);
+    }
+    // Note: we don't auto-clear orientationPaused on return to landscape —
+    // the Resume button does that, so the user can also reclaim fullscreen
+    // via a user gesture in the same tap.
+  } else {
+    // Pre-game or on end screen: show rotation prompt in portrait
+    prompt.classList.toggle('show', portrait);
+    setOrientationPause(false);
+  }
 }
 window.addEventListener('resize', checkOrientation);
 window.addEventListener('orientationchange', checkOrientation);
+
+// ============================================================
+//   VISIBILITY / FOCUS — pause when backgrounded or asleep
+// ============================================================
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) setHiddenPause(true);
+  // We don't auto-clear on visibilitychange return — the Resume
+  // button handles that, so audio only resumes under a user gesture.
+});
+window.addEventListener('blur', () => setHiddenPause(true));
+window.addEventListener('pagehide', () => setHiddenPause(true));
 // Re-fit the canvas when fullscreen state changes (Chrome's address bar hides)
 document.addEventListener('fullscreenchange', () => { fitCanvas(); checkOrientation(); updateFullscreenHint(); });
 document.addEventListener('webkitfullscreenchange', () => { fitCanvas(); checkOrientation(); updateFullscreenHint(); });
