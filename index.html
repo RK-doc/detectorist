@@ -423,6 +423,41 @@ canvas { touch-action: none; }
 }
 #mute-btn.muted { opacity: 1; color: var(--burgundy-hi); }
 
+/* Fullscreen hint — a small banner that shows when we've lost fullscreen mid-game */
+#fullscreen-hint {
+  position: absolute;
+  top: calc(10px + env(safe-area-inset-top, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(37, 26, 16, 0.9);
+  border: 1px solid var(--brass);
+  color: var(--brass-hi);
+  font-family: 'Fraunces', Georgia, serif;
+  font-size: 13px;
+  padding: 8px 16px;
+  border-radius: 20px;
+  z-index: 30;
+  display: none;
+  cursor: pointer;
+  user-select: none;
+  touch-action: manipulation;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  animation: hintPulse 1.6s ease-in-out infinite;
+}
+#fullscreen-hint.visible { display: flex; }
+#fullscreen-hint .icon { font-size: 16px; }
+@keyframes hintPulse {
+  0%, 100% { transform: translateX(-50%) scale(1); }
+  50% { transform: translateX(-50%) scale(1.04); }
+}
+
+/* Darkened freeze when find toast is up */
+#stage.paused canvas { filter: brightness(0.55) saturate(0.75); transition: filter 0.3s; }
+#stage canvas { transition: filter 0.3s; }
+#stage.paused #action-btn { pointer-events: none; opacity: 0.3; }
+
 .mobile-only { display: none; }
 @media (hover: none) and (pointer: coarse) {
   /* Only show touch controls while playing — not on the start/end overlays */
@@ -489,6 +524,11 @@ canvas { touch-action: none; }
   <div id="stamina-mobile"><div id="stamina-mobile-fill" style="width:100%"></div></div>
 
   <button id="mute-btn" aria-label="Mute">🔊</button>
+
+  <div id="fullscreen-hint">
+    <span class="icon">⛶</span>
+    <span>Tap to resume fullscreen</span>
+  </div>
 
   <div id="hud" class="hidden">
     <div class="hud-panel">
@@ -1098,6 +1138,14 @@ muteBtn.addEventListener('pointerdown', (e) => {
     setDetectorTone(0, false);
     if (navigator.vibrate) navigator.vibrate(0);
   }
+});
+
+// --- FULLSCREEN HINT TAP ---
+// Tapping the hint reclaims fullscreen (counts as a user gesture)
+document.getElementById('fullscreen-hint').addEventListener('pointerdown', (e) => {
+  e.stopPropagation();
+  e.preventDefault();
+  requestFullscreenIfTouch();
 });
 
 // ============================================================
@@ -1974,8 +2022,29 @@ function showFindToast(def) {
   document.getElementById('toast-worth').textContent = def.junk ? 'worthless' : (def.value + ' Kč');
   toast.classList.toggle('junk', !!def.junk);
   toast.classList.add('show');
+  // Pause the game while the find card is up — gives the player a beat to
+  // read the card without Kubát sneaking up on them mid-read.
+  pauseForToast();
   if (toastTimer) clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toast.classList.remove('show'), 2600);
+  toastTimer = setTimeout(() => {
+    toast.classList.remove('show');
+    resumeFromToast();
+  }, 2600);
+}
+
+function pauseForToast() {
+  if (game.phase !== 'play') return;
+  game.paused = true;
+  document.getElementById('stage').classList.add('paused');
+  // Silence the detector hum during the pause
+  setDetectorTone(0, false);
+}
+function resumeFromToast() {
+  if (game.phase !== 'play') return;
+  game.paused = false;
+  document.getElementById('stage').classList.remove('paused');
+  // Reset frame timing so dt doesn't jump
+  game.lastFrame = performance.now();
 }
 
 function endSession(reason) {
@@ -2050,8 +2119,12 @@ function showEndScreen(reason) {
 // ============================================================
 //   GAME LIFECYCLE
 // ============================================================
+function isInFullscreen() {
+  return !!(document.fullscreenElement || document.webkitFullscreenElement);
+}
 function requestFullscreenIfTouch() {
   if (!isTouchDevice) return;
+  if (isInFullscreen()) return;
   const el = document.documentElement;
   // The Fullscreen API needs a user gesture; this is called from the Start button
   const req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
@@ -2060,6 +2133,14 @@ function requestFullscreenIfTouch() {
     const p = req.call(el, { navigationUI: 'hide' });
     if (p && p.catch) p.catch(() => {});
   } catch (e) {}
+}
+// If we lose fullscreen mid-game (sleep, rotate, system intervention), show
+// a soft reminder so the user can tap once to reclaim it.
+function updateFullscreenHint() {
+  const hint = document.getElementById('fullscreen-hint');
+  if (!hint) return;
+  const needHint = isTouchDevice && game.phase === 'play' && !isInFullscreen();
+  hint.classList.toggle('visible', needHint);
 }
 
 function startGame() {
@@ -2085,6 +2166,8 @@ function startGame() {
   game.phase = 'play';
   game.lastFrame = performance.now();
   updateHud();
+  // Give the browser a moment to apply fullscreen before deciding whether to hint
+  setTimeout(updateFullscreenHint, 500);
 }
 
 function applyHdMode() {
@@ -2100,10 +2183,12 @@ function applyHdMode() {
 }
 
 function resetGame() {
-  // Clear any lingering toast from a prior run
+  // Clear any lingering toast and pause state from a prior run
   const toast = document.getElementById('find-toast');
   if (toast) toast.classList.remove('show');
   if (toastTimer) { clearTimeout(toastTimer); toastTimer = null; }
+  document.getElementById('stage').classList.remove('paused');
+  game.paused = false;
 
   game.playerState = 'walk';
   game.time = 0;
@@ -2143,7 +2228,7 @@ function tick(now) {
   game.lastFrame = now;
   game.time += dt;
 
-  if (game.phase === 'play') {
+  if (game.phase === 'play' && !game.paused) {
     // Read one-shot inputs
     if (pressed['Space']) { handleSpace(); }
     updatePlayer(dt);
@@ -2191,8 +2276,14 @@ function checkOrientation() {
 window.addEventListener('resize', checkOrientation);
 window.addEventListener('orientationchange', checkOrientation);
 // Re-fit the canvas when fullscreen state changes (Chrome's address bar hides)
-document.addEventListener('fullscreenchange', () => { fitCanvas(); checkOrientation(); });
-document.addEventListener('webkitfullscreenchange', () => { fitCanvas(); checkOrientation(); });
+document.addEventListener('fullscreenchange', () => { fitCanvas(); checkOrientation(); updateFullscreenHint(); });
+document.addEventListener('webkitfullscreenchange', () => { fitCanvas(); checkOrientation(); updateFullscreenHint(); });
+
+// After sleep/wake or orientation change, we may need the hint to appear
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) updateFullscreenHint();
+});
+window.addEventListener('focus', updateFullscreenHint);
 
 // ============================================================
 //   BOOT
