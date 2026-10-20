@@ -1237,9 +1237,14 @@ function handleSpace() {
       game.pinpointT = 0;
     }
   } else if (game.playerState === 'pinpoint') {
-    // Must be near the target
+    // Snap character onto the pinpoint target so the dig animation
+    // and the resulting hole are visually in the same place, and so
+    // tapping Dig always works while pinpoint is still active.
     const p = game.player, t = game.pinpointTarget;
-    if (t && dist(p.x, p.y, t.x, t.y) < 45) {
+    if (t) {
+      p.x = t.x;
+      p.y = t.y;
+      p.vx = 0; p.vy = 0;
       game.playerState = 'dig';
       game.digT = 0;
     }
