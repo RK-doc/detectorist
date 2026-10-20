@@ -2136,22 +2136,16 @@ function recomputePauseState() {
   const stage = document.getElementById('stage');
   stage.classList.toggle('paused', nowPaused);
 
-  // Explicit paused overlay (for sleep / orientation — not for toast,
-  // which has its own card and darkening)
+  // The paused overlay (brass Resume button) appears for sleep / backgrounding,
+  // and for orientation-only pauses once the phone is back in landscape.
+  // While portrait, the big rotation prompt owns the screen instead.
   const overlay = document.getElementById('paused-overlay');
   if (overlay) {
-    const showOverlay = nowPaused && !game.toastPaused;
+    const portrait = window.innerHeight > window.innerWidth;
+    const showOverlay = nowPaused && !game.toastPaused && !portrait;
     overlay.classList.toggle('visible', showOverlay);
     const msg = overlay.querySelector('.msg');
-    if (msg) {
-      if (game.orientationPaused && !game.hiddenPaused) {
-        msg.textContent = 'Paused — rotate phone or tap to resume';
-      } else if (game.hiddenPaused) {
-        msg.textContent = 'Paused — tap to resume';
-      } else {
-        msg.textContent = 'Paused';
-      }
-    }
+    if (msg) msg.textContent = 'Paused — tap to resume';
   }
 
   if (nowPaused) {
@@ -2301,6 +2295,10 @@ function startGame() {
   game.phase = 'play';
   game.lastFrame = performance.now();
   updateHud();
+  // Prime the orientation watcher now that phase === 'play' — otherwise
+  // the first rotation from the initial landscape doesn't register until
+  // another event re-triggers checkOrientation.
+  checkOrientation();
   // Give the browser a moment to apply fullscreen before deciding whether to hint
   setTimeout(updateFullscreenHint, 500);
 }
@@ -2405,28 +2403,32 @@ function fitCanvas() {
 window.addEventListener('resize', fitCanvas);
 
 // ============================================================
-//   ORIENTATION — rotation prompt before play; pause while playing
+//   ORIENTATION — rotation prompt is used both pre-game and when paused
+//   mid-game while portrait. Mid-game pause is a separate flag; the big
+//   paused overlay (with Resume) only shows once we're back in landscape.
 // ============================================================
 function checkOrientation() {
   if (!isTouchDevice) return;
   const portrait = window.innerHeight > window.innerWidth;
   const prompt = document.getElementById('rotation-prompt');
   if (game.phase === 'play') {
-    // Mid-game: don't show the big rotation prompt — just pause.
-    // Any orientation change pauses; returning to landscape clears it
-    // only via the Resume button (user-initiated gesture).
-    prompt.classList.remove('show');
     if (portrait) {
+      // Entering portrait while playing: pause and show the rotation prompt
       setOrientationPause(true);
+      prompt.classList.add('show');
+    } else {
+      // Back in landscape: dismiss the rotation prompt. We don't auto-clear
+      // the pause itself — the Resume button is the gesture that restarts
+      // audio and reclaims fullscreen.
+      prompt.classList.remove('show');
     }
-    // Note: we don't auto-clear orientationPaused on return to landscape —
-    // the Resume button does that, so the user can also reclaim fullscreen
-    // via a user gesture in the same tap.
   } else {
-    // Pre-game or on end screen: show rotation prompt in portrait
+    // Pre-game or end screen: rotation prompt is purely informational
     prompt.classList.toggle('show', portrait);
     setOrientationPause(false);
   }
+  // The paused overlay's message depends on orientation; refresh it
+  recomputePauseState();
 }
 window.addEventListener('resize', checkOrientation);
 window.addEventListener('orientationchange', checkOrientation);
