@@ -607,7 +607,7 @@ canvas { touch-action: none; }
   <div id="hud" class="hidden">
     <div class="hud-panel">
       <div class="label">In the pouch</div>
-      <div class="val"><span id="find-count">0</span> finds · <span id="find-value">0</span> Kč</div>
+      <div class="val"><span id="find-count">0</span> finds · <span id="find-value">0</span> €</div>
     </div>
     <div class="hud-panel">
       <div class="label">Stamina</div>
@@ -1217,12 +1217,16 @@ muteBtn.addEventListener('pointerdown', (e) => {
 // --- RESUME BANNER TAP ---
 // One gesture resumes the game AND reclaims fullscreen. Only active in
 // landscape (the banner isn't visible in portrait).
-document.getElementById('fullscreen-hint').addEventListener('pointerdown', (e) => {
+// We use 'click' (not pointerdown + preventDefault) because Chrome Android
+// only honors Fullscreen requests from gestures that reach a trusted click
+// event — preventDefault on pointerdown suppresses it.
+document.getElementById('fullscreen-hint').addEventListener('click', (e) => {
   e.stopPropagation();
-  e.preventDefault();
   const portrait = window.innerHeight > window.innerWidth;
   if (portrait) return;
+  // Request fullscreen FIRST while user activation is fresh
   requestFullscreenIfTouch();
+  // Then clear every pause reason so the game resumes
   setHiddenPause(false);
   setOrientationPause(false);
 });
@@ -2101,7 +2105,7 @@ function showFindToast(def) {
   const toast = document.getElementById('find-toast');
   document.getElementById('toast-name').textContent = def.name;
   document.getElementById('toast-desc').textContent = def.desc;
-  document.getElementById('toast-worth').textContent = def.junk ? 'worthless' : (def.value + ' Kč');
+  document.getElementById('toast-worth').textContent = def.junk ? 'worthless' : (def.value + ' €');
   toast.classList.toggle('junk', !!def.junk);
   toast.classList.add('show');
   // Pause the game while the find card is up — gives the player a beat to
@@ -2236,16 +2240,16 @@ function showEndScreen(reason) {
       const total = g.def.value * g.count;
       html += `<div class="find-row">
         <span class="name">${g.def.name}${g.count > 1 ? ` <span style="opacity:0.6">×${g.count}</span>` : ''}</span>
-        <span class="worth">${total} Kč</span>
+        <span class="worth">${total} €</span>
       </div>`;
     }
     html += `<div class="total-row">
       <span>${reason === 'escaped' ? 'Banked' : 'Confiscated'}</span>
-      <span>${reason === 'escaped' ? value : 0} Kč</span>
+      <span>${reason === 'escaped' ? value : 0} €</span>
     </div>`;
     if (reason === 'caught') {
       html += `<div style="opacity:0.7; font-size:0.85em; margin-top:6px; font-style:italic; text-align:right">
-        (would have been ${value} Kč)</div>`;
+        (would have been ${value} €)</div>`;
     }
     finds.innerHTML = html;
   } else {
@@ -2275,10 +2279,12 @@ function requestFullscreenIfTouch() {
   if (isInFullscreen()) return;
   const el = document.documentElement;
   // The Fullscreen API needs a user gesture; this is called from the Start button
+  // and from the resume banner tap. We don't pass {navigationUI:'hide'} because
+  // some Android Chrome versions reject the request when that option is set.
   const req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
   if (!req) return;
   try {
-    const p = req.call(el, { navigationUI: 'hide' });
+    const p = req.call(el);
     if (p && p.catch) p.catch(() => {});
   } catch (e) {}
 }
