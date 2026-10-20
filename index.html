@@ -39,7 +39,9 @@ html, body {
 #stage {
   position: relative;
   width: 100vw;
-  height: 100vh;
+  /* 100dvh adapts to Chrome's address bar as it hides/shows */
+  height: 100dvh;
+  min-height: 100vh;
   display: grid;
   place-items: center;
 }
@@ -2012,6 +2014,18 @@ function showEndScreen(reason) {
 // ============================================================
 //   GAME LIFECYCLE
 // ============================================================
+function requestFullscreenIfTouch() {
+  if (!isTouchDevice) return;
+  const el = document.documentElement;
+  // The Fullscreen API needs a user gesture; this is called from the Start button
+  const req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
+  if (!req) return;
+  try {
+    const p = req.call(el, { navigationUI: 'hide' });
+    if (p && p.catch) p.catch(() => {});
+  } catch (e) {}
+}
+
 function startGame() {
   // Read HD toggle before we touch the canvas
   const hdCheck = document.getElementById('hd-toggle');
@@ -2020,6 +2034,8 @@ function startGame() {
     hdMode = wantHd;
     applyHdMode();
   }
+  // Fullscreen first (needs the user gesture from the Start button)
+  requestFullscreenIfTouch();
   // Try to lock orientation on supported devices (silently ignore failures)
   if (isTouchDevice && screen.orientation && screen.orientation.lock) {
     try { screen.orientation.lock('landscape').catch(()=>{}); } catch (e) {}
@@ -2137,6 +2153,9 @@ function checkOrientation() {
 }
 window.addEventListener('resize', checkOrientation);
 window.addEventListener('orientationchange', checkOrientation);
+// Re-fit the canvas when fullscreen state changes (Chrome's address bar hides)
+document.addEventListener('fullscreenchange', () => { fitCanvas(); checkOrientation(); });
+document.addEventListener('webkitfullscreenchange', () => { fitCanvas(); checkOrientation(); });
 
 // ============================================================
 //   BOOT
