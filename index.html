@@ -2288,14 +2288,15 @@ function requestFullscreenIfTouch() {
     if (p && p.catch) p.catch(() => {});
   } catch (e) {}
 }
-// Resume banner — the single tap target shown when the game is paused in
-// landscape. One tap clears every pause reason and reclaims fullscreen.
-// In portrait, the big phone-rotation overlay takes over instead.
+// Resume banner — shown whenever the game is paused in landscape (both
+// desktop and mobile). On desktop a tab-return auto-resumes, so the banner
+// is usually only visible for a split second; on mobile it's the primary
+// resume affordance. In portrait, the big phone-rotation overlay takes over.
 function updateFullscreenHint() {
   const hint = document.getElementById('fullscreen-hint');
   if (!hint) return;
   const portrait = window.innerHeight > window.innerWidth;
-  const show = isTouchDevice && game.phase === 'play' && game.paused && !portrait && !game.toastPaused;
+  const show = game.phase === 'play' && game.paused && !portrait && !game.toastPaused;
   hint.classList.toggle('visible', show);
 }
 
@@ -2457,12 +2458,26 @@ window.addEventListener('orientationchange', checkOrientation);
 // ============================================================
 //   VISIBILITY / FOCUS — pause when backgrounded or asleep
 // ============================================================
+// On desktop we auto-resume when the tab becomes visible again (there's no
+// mobile-style audio or fullscreen gesture requirement). On mobile a tap on
+// the resume banner is still required so that fullscreen can be reclaimed
+// and the audio context can resume with a user gesture.
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) setHiddenPause(true);
-  // We don't auto-clear on visibilitychange return — the Resume
-  // button handles that, so audio only resumes under a user gesture.
+  if (document.hidden) {
+    setHiddenPause(true);
+  } else if (!isTouchDevice) {
+    setHiddenPause(false);
+  }
 });
-window.addEventListener('blur', () => setHiddenPause(true));
+// Window focus is also a safe desktop resume signal (covers alt-tab-return
+// on multi-monitor setups where visibilitychange may not fire).
+window.addEventListener('focus', () => {
+  if (!isTouchDevice) setHiddenPause(false);
+});
+// Mobile only: blur is a defensive pause (visibilitychange has been known
+// to miss events on some Android versions). On desktop, blur fires for too
+// many trivial reasons (clicking into DevTools, etc) so we skip it.
+window.addEventListener('blur', () => { if (isTouchDevice) setHiddenPause(true); });
 window.addEventListener('pagehide', () => setHiddenPause(true));
 // Re-fit the canvas when fullscreen state changes (Chrome's address bar hides)
 document.addEventListener('fullscreenchange', () => { fitCanvas(); checkOrientation(); updateFullscreenHint(); });
